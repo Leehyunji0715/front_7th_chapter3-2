@@ -6,33 +6,37 @@ import { formatPriceSymbol } from "../utils/formatters";
 
 type Props = {
   products: ProductWithUI[];
-  cart: CartItem[];
-  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   coupons: Coupon[];
-  applyCoupon: (coupon: Coupon) => void;
   selectedCoupon: null | Coupon;
   setSelectedCoupon: React.Dispatch<React.SetStateAction<null | Coupon>>;
   debouncedSearchTerm: string;
   addNotification: (message: string, type: "error" | "success" | "warning") => void;
+  cart: CartItem[];
+  applyCoupon: (coupon: Coupon) => void;
+  addToCart: (product: Product) => void;
+  removeFromCart: (productId: string) => void;
+  clearCart: () => void;
+  updateQuantity: (product: Product, quantity: number) => void;
+  calculateCartTotal: () => { totalBeforeDiscount: number; totalAfterDiscount: number };
+  getRemainingStock: (product: Product) => number;
 };
 
 export const CartPage = ({
   products,
-  cart,
-  setCart,
   coupons,
   selectedCoupon,
   setSelectedCoupon,
   debouncedSearchTerm,
   addNotification,
+  cart,
+  applyCoupon,
+  addToCart,
+  removeFromCart,
+  clearCart,
+  updateQuantity,
+  calculateCartTotal,
+  getRemainingStock,
 }: Props) => {
-  const getRemainingStock = (product: Product): number => {
-    const cartItem = cart.find((item) => item.product.id === product.id);
-    const remaining = product.stock - (cartItem?.quantity || 0);
-
-    return remaining;
-  };
-
   const formatPrice = (price: number, productId?: string): string => {
     if (productId) {
       const product = products.find((p) => p.id === productId);
@@ -43,40 +47,6 @@ export const CartPage = ({
 
     return formatPriceSymbol(price);
   };
-
-  const removeFromCart = useCallback((productId: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.product.id !== productId));
-  }, []);
-
-  const addToCart = useCallback(
-    (product: ProductWithUI) => {
-      const remainingStock = getRemainingStock(product);
-      if (remainingStock <= 0) {
-        addNotification("재고가 부족합니다!", "error");
-        return;
-      }
-
-      setCart((prevCart) => {
-        const existingItem = prevCart.find((item) => item.product.id === product.id);
-
-        if (existingItem) {
-          const newQuantity = existingItem.quantity + 1;
-
-          if (newQuantity > product.stock) {
-            addNotification(`재고는 ${product.stock}개까지만 있습니다.`, "error");
-            return prevCart;
-          }
-
-          return prevCart.map((item) => (item.product.id === product.id ? { ...item, quantity: newQuantity } : item));
-        }
-
-        return [...prevCart, { product, quantity: 1 }];
-      });
-
-      addNotification("장바구니에 담았습니다", "success");
-    },
-    [cart, addNotification, getRemainingStock]
-  );
 
   const calculateItemTotal = (item: CartItem): number => {
     const { price } = item.product;
@@ -102,75 +72,10 @@ export const CartPage = ({
     return baseDiscount;
   };
 
-  const updateQuantity = useCallback(
-    (productId: string, newQuantity: number) => {
-      if (newQuantity <= 0) {
-        removeFromCart(productId);
-        return;
-      }
-
-      const product = products.find((p) => p.id === productId);
-      if (!product) return;
-
-      const maxStock = product.stock;
-      if (newQuantity > maxStock) {
-        addNotification(`재고는 ${maxStock}개까지만 있습니다.`, "error");
-        return;
-      }
-
-      setCart((prevCart) =>
-        prevCart.map((item) => (item.product.id === productId ? { ...item, quantity: newQuantity } : item))
-      );
-    },
-    [products, removeFromCart, addNotification, getRemainingStock]
-  );
-
-  const calculateCartTotal = (): {
-    totalBeforeDiscount: number;
-    totalAfterDiscount: number;
-  } => {
-    let totalBeforeDiscount = 0;
-    let totalAfterDiscount = 0;
-
-    cart.forEach((item) => {
-      const itemPrice = item.product.price * item.quantity;
-      totalBeforeDiscount += itemPrice;
-      totalAfterDiscount += calculateItemTotal(item);
-    });
-
-    if (selectedCoupon) {
-      if (selectedCoupon.discountType === "amount") {
-        totalAfterDiscount = Math.max(0, totalAfterDiscount - selectedCoupon.discountValue);
-      } else {
-        totalAfterDiscount = Math.round(totalAfterDiscount * (1 - selectedCoupon.discountValue / 100));
-      }
-    }
-
-    return {
-      totalBeforeDiscount: Math.round(totalBeforeDiscount),
-      totalAfterDiscount: Math.round(totalAfterDiscount),
-    };
-  };
-
-  const applyCoupon = useCallback(
-    (coupon: Coupon) => {
-      const currentTotal = calculateCartTotal().totalAfterDiscount;
-
-      if (currentTotal < 10000 && coupon.discountType === "percentage") {
-        addNotification("percentage 쿠폰은 10,000원 이상 구매 시 사용 가능합니다.", "error");
-        return;
-      }
-
-      setSelectedCoupon(coupon);
-      addNotification("쿠폰이 적용되었습니다.", "success");
-    },
-    [addNotification, calculateCartTotal]
-  );
-
   const completeOrder = useCallback(() => {
     const orderNumber = `ORD-${Date.now()}`;
     addNotification(`주문이 완료되었습니다. 주문번호: ${orderNumber}`, "success");
-    setCart([]);
+    clearCart();
     setSelectedCoupon(null);
   }, [addNotification]);
 
@@ -337,14 +242,14 @@ export const CartPage = ({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center">
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.product, item.quantity - 1)}
                             className="w-6 h-6 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100"
                           >
                             <span className="text-xs">−</span>
                           </button>
                           <span className="mx-3 text-sm font-medium w-8 text-center">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.product, item.quantity + 1)}
                             className="w-6 h-6 rounded border border-gray-300 flex items-center justify-center hover:bg-gray-100"
                           >
                             <span className="text-xs">+</span>

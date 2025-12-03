@@ -3,6 +3,7 @@ import { Product, ProductWithUI } from "../models/product";
 import { Coupon } from "../../types";
 import { CartItem } from "../models/cart";
 import { formatProceAdmin } from "../utils/formatters";
+import { useCart } from "../hooks/useCart";
 
 type Props = {
   addNotification: (message: string, type: "error" | "success" | "warning") => void;
@@ -15,7 +16,6 @@ type Props = {
   deleteCoupon: (couponId: string) => void;
   selectedCoupon: null | Coupon;
   setSelectedCoupon: React.Dispatch<React.SetStateAction<null | Coupon>>;
-  cart: CartItem[];
 };
 
 export const AdminPage = ({
@@ -29,8 +29,8 @@ export const AdminPage = ({
   deleteCoupon,
   selectedCoupon,
   setSelectedCoupon,
-  cart,
 }: Props) => {
+  const { cart } = useCart();
   const [activeTab, setActiveTab] = useState<"products" | "coupons">("products");
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);

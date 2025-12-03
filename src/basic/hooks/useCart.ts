@@ -14,21 +14,22 @@
 // - cartModel.getRemainingStock
 //
 // 반환할 값:
-// - cart: 장바구니 아이템 배열
-// - selectedCoupon: 선택된 쿠폰
-// - addToCart: 상품 추가 함수
-// - removeFromCart: 상품 제거 함수
-// - updateQuantity: 수량 변경 함수
-// - applyCoupon: 쿠폰 적용 함수
-// - calculateTotal: 총액 계산 함수
-// - getRemainingStock: 재고 확인 함수
-// - clearCart: 장바구니 비우기 함수
+// 1 - cart: 장바구니 아이템 배열
+// 1 - selectedCoupon: 선택된 쿠폰
+// 1 - addToCart: 상품 추가 함수
+// 1 - removeFromCart: 상품 제거 함수
+// 1 - updateQuantity: 수량 변경 함수
+// 1 - applyCoupon: 쿠폰 적용 함수
+// 1 - calculateTotal: 총액 계산 함수
+// 1 - getRemainingStock: 재고 확인 함수
+// 1 - clearCart: 장바구니 비우기 함수
 
 import { useCallback, useEffect, useState } from "react";
 import { CartItem } from "../models/cart";
 import { Coupon } from "../models/coupon";
+import { Product, ProductWithUI } from "../models/product";
 
-export function useCart(callback: { onApplyCoupon: (coupon: Coupon, curTotal: number) => void }) {
+export function useCart(callback: (type: "error" | "success" | "warning", message: string) => void) {
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem("cart");
@@ -96,11 +97,82 @@ export function useCart(callback: { onApplyCoupon: (coupon: Coupon, curTotal: nu
   const applyCoupon = useCallback(
     (coupon: Coupon) => {
       const currentTotal = calculateCartTotal().totalAfterDiscount;
-      callback.onApplyCoupon(coupon, currentTotal);
+
+      if (currentTotal < 10000 && coupon.discountType === "percentage") {
+        callback("error", "percentage 쿠폰은 10,000원 이상 구매 시 사용 가능합니다.");
+        return;
+      }
+
       setSelectedCoupon(coupon);
+      callback("success", "쿠폰이 적용되었습니다.");
     },
     [calculateCartTotal]
   );
+
+  const getRemainingStock = (product: Product): number => {
+    const cartItem = cart.find((item) => item.product.id === product.id);
+    const remaining = product.stock - (cartItem?.quantity || 0);
+
+    return remaining;
+  };
+
+  const addToCart = useCallback(
+    (product: ProductWithUI) => {
+      const remainingStock = getRemainingStock(product);
+      if (remainingStock <= 0) {
+        callback("error", "재고가 부족합니다!");
+        return;
+      }
+
+      setCart((prevCart) => {
+        const existingItem = prevCart.find((item) => item.product.id === product.id);
+
+        if (existingItem) {
+          const newQuantity = existingItem.quantity + 1;
+
+          if (newQuantity > product.stock) {
+            callback("error", `재고는 ${product.stock}개까지만 있습니다.`);
+            return prevCart;
+          }
+
+          return prevCart.map((item) => (item.product.id === product.id ? { ...item, quantity: newQuantity } : item));
+        }
+
+        return [...prevCart, { product, quantity: 1 }];
+      });
+
+      callback("success", "장바구니에 담았습니다");
+    },
+    [cart, getRemainingStock]
+  );
+
+  const removeFromCart = useCallback((productId: string) => {
+    setCart((prevCart) => prevCart.filter((item) => item.product.id !== productId));
+  }, []);
+
+  const updateQuantity = useCallback(
+    (product: ProductWithUI, newQuantity: number) => {
+      if (newQuantity <= 0) {
+        removeFromCart(product.id);
+        return;
+      }
+
+      const maxStock = product.stock;
+      if (newQuantity > maxStock) {
+        callback("error", `재고는 ${maxStock}개까지만 있습니다.`);
+        return;
+      }
+
+      setCart((prevCart) =>
+        prevCart.map((item) => (item.product.id === product.id ? { ...item, quantity: newQuantity } : item))
+      );
+    },
+    [removeFromCart, getRemainingStock]
+  );
+
+  const clearCart = () => {
+    setCart([]);
+  };
 
   useEffect(() => {
     if (cart.length > 0) {
@@ -110,5 +182,15 @@ export function useCart(callback: { onApplyCoupon: (coupon: Coupon, curTotal: nu
     }
   }, [cart]);
 
-  return { cart, selectedCoupon, applyCoupon, calculateCartTotal };
+  return {
+    cart,
+    selectedCoupon,
+    addToCart,
+    removeFromCart,
+    applyCoupon,
+    calculateCartTotal,
+    getRemainingStock,
+    updateQuantity,
+    clearCart,
+  };
 }
