@@ -2,12 +2,14 @@ import { useCallback } from "react";
 import { Product, ProductWithUI } from "../models/product";
 import { Coupon } from "../../types";
 import { CartItem } from "../models/cart";
+import { formatPriceSymbol } from "../utils/formatters";
 
 type Props = {
   products: ProductWithUI[];
   cart: CartItem[];
   setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
   coupons: Coupon[];
+  applyCoupon: (coupon: Coupon) => void;
   selectedCoupon: null | Coupon;
   setSelectedCoupon: React.Dispatch<React.SetStateAction<null | Coupon>>;
   debouncedSearchTerm: string;
@@ -39,11 +41,7 @@ export const CartPage = ({
       }
     }
 
-    // if (isAdmin) {
-    //   return `${price.toLocaleString()}원`;
-    // }
-
-    return `₩${price.toLocaleString()}`;
+    return formatPriceSymbol(price);
   };
 
   const removeFromCart = useCallback((productId: string) => {
