@@ -8,21 +8,12 @@
 // - addCoupon: 새 쿠폰 추가
 // - removeCoupon: 쿠폰 삭제
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { Coupon } from "../models/coupon";
+import { useLocalStorage } from "../utils/hooks/useLocalStorage";
 
 export function useCoupons(initialCoupons: Coupon[]) {
-  const [coupons, setCoupons] = useState<Coupon[]>(() => {
-    const saved = localStorage.getItem("coupons");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return initialCoupons;
-      }
-    }
-    return initialCoupons;
-  });
+  const [coupons, setCoupons] = useLocalStorage<Coupon[]>("coupons", initialCoupons);
 
   const addCoupon = useCallback(
     (newCoupon: Coupon) => {
@@ -34,10 +25,6 @@ export function useCoupons(initialCoupons: Coupon[]) {
   const removeCoupon = useCallback((couponCode: string) => {
     setCoupons((prev) => prev.filter((c) => c.code !== couponCode));
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem("coupons", JSON.stringify(coupons));
-  }, [coupons]);
 
   return { coupons, addCoupon, removeCoupon };
 }
